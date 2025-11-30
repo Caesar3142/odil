@@ -257,24 +257,46 @@ def plot_func(problem, state, epoch, frame, cbinfo=None):
     ax.set_aspect("equal")
     plt.colorbar(im, ax=ax)
     
-    # Plot 2: Streamlines (using quiver for reliability)
+    # Plot 2: Streamlines (following standard matplotlib pattern)
     ax = axes[1]
-    skip = max(1, args.Nx // 16)
-    # Use quiver plot which is more reliable than streamplot
-    ax.quiver(
-        x[::skip, ::skip],
-        y[::skip, ::skip],
-        u[::skip, ::skip],
-        v[::skip, ::skip],
-        scale=5,
-        scale_units="xy",
-        angles="xy",
-        width=0.003,
+    # Convert to numpy arrays
+    x_np = np.array(x)
+    y_np = np.array(y)
+    u_np = np.array(u)
+    v_np = np.array(v)
+    
+    # Extract 1D coordinate arrays
+    # In ODIL with 'ij' indexing: x varies along first dim, y along second dim
+    x_1d = x_np[:, 0]  # x coordinates (same for all rows, take first column)
+    y_1d = y_np[0, :]  # y coordinates (same for all columns, take first row)
+    
+    # Create meshgrid with 'xy' indexing (default, standard for matplotlib)
+    X, Y = np.meshgrid(x_1d, y_1d)
+    
+    # Velocity arrays need to be transposed to match 'xy' indexing
+    # ODIL: u[i, j] where i is x-index, j is y-index
+    # streamplot: U[i, j] where i is y-index, j is x-index
+    U = u_np.T  # Transpose to match streamplot format
+    V = v_np.T  # Transpose to match streamplot format
+    
+    # Compute velocity magnitude for coloring
+    speed = np.sqrt(U**2 + V**2)
+    
+    # Create streamlines colored by velocity magnitude
+    strm = ax.streamplot(
+        X, Y, U, V,
+        density=1.5,
+        color=speed,
+        cmap='viridis',
+        linewidth=1.5,
     )
-    ax.set_title("Velocity Vectors")
-    ax.set_xlabel("x")
-    ax.set_ylabel("y")
-    ax.set_aspect("equal")
+    ax.set_xlabel('x')
+    ax.set_ylabel('y')
+    ax.set_title('Streamlines')
+    ax.set_aspect('equal')
+    ax.set_xlim(0, 1)
+    ax.set_ylim(0, 1)
+    plt.colorbar(strm.lines, ax=ax, label='Velocity Magnitude')
     
     # Plot 3: Pressure
     ax = axes[2]
