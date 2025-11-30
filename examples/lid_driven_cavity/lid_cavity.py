@@ -209,6 +209,7 @@ def parse_args():
     parser.set_defaults(frames=10, plot_every=100, report_every=50, history_every=10)
     parser.set_defaults(optimizer="adam", lr=1e-3)
     parser.set_defaults(multigrid=1)
+    parser.set_defaults(nlvl=None)  # Auto-detect number of levels
     parser.set_defaults(double=1)
     
     return parser.parse_args()
