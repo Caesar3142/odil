@@ -14,7 +14,7 @@ Where:
 
 Boundary conditions:
     Top wall (y=1): u = 1, v = 0  (moving lid)
-    Other walls: u = 0, v = 0     (no-slip)
+    Other walls: Free-slip (normal velocity = 0, zero normal gradient for tangential velocity)
     Pressure: Reference point at bottom-left corner
 """
 
@@ -78,21 +78,27 @@ def operator(ctx):
     zero = ctx.cast(0)
     one = ctx.cast(1)
     
-    # Top wall (iy == ny-1): u = 1, v = 0
+    # FREE-SLIP BOUNDARY CONDITIONS:
+    # Normal velocity = 0, tangential velocity has zero normal gradient (mirror condition)
+    
+    # Top wall (iy == ny-1): u = 1 (moving lid), v = 0 (normal = 0)
     u_n = mod.where(iy == ny - 1, one, u_n)
     v_n = mod.where(iy == ny - 1, zero, v_n)
     
-    # Bottom wall (iy == 0): u = 0, v = 0
-    u_s = mod.where(iy == 0, zero, u_s)
+    # Bottom wall (iy == 0): v = 0 (normal = 0), u has zero gradient in y (free slip)
+    # Mirror condition: u_s = u (tangential velocity equals interior value)
     v_s = mod.where(iy == 0, zero, v_s)
+    u_s = mod.where(iy == 0, u, u_s)  # Free slip: mirror u
     
-    # Left wall (ix == 0): u = 0, v = 0
+    # Left wall (ix == 0): u = 0 (normal = 0), v has zero gradient in x (free slip)
+    # Mirror condition: v_w = v (tangential velocity equals interior value)
     u_w = mod.where(ix == 0, zero, u_w)
-    v_w = mod.where(ix == 0, zero, v_w)
+    v_w = mod.where(ix == 0, v, v_w)  # Free slip: mirror v
     
-    # Right wall (ix == nx-1): u = 0, v = 0
+    # Right wall (ix == nx-1): u = 0 (normal = 0), v has zero gradient in x (free slip)
+    # Mirror condition: v_e = v (tangential velocity equals interior value)
     u_e = mod.where(ix == nx - 1, zero, u_e)
-    v_e = mod.where(ix == nx - 1, zero, v_e)
+    v_e = mod.where(ix == nx - 1, v, v_e)  # Free slip: mirror v
     
     # Compute derivatives using finite differences
     # Laplacian (diffusion term)
@@ -170,17 +176,20 @@ def operator(ctx):
     fu = mod.where(iy == ny - 1, (u - one) / dx, fu)
     fv = mod.where(iy == ny - 1, v / dx, fv)
     
-    # Bottom wall: u = 0, v = 0
-    fu = mod.where(iy == 0, u / dx, fu)
+    # Bottom wall: v = 0 (normal), ∂u/∂y = 0 (free slip)
+    # Enforce v = 0 and zero gradient for u (already handled by mirror condition in stencil)
     fv = mod.where(iy == 0, v / dx, fv)
+    # u has zero gradient, so no explicit constraint needed (mirror handles it)
     
-    # Left wall: u = 0, v = 0
+    # Left wall: u = 0 (normal), ∂v/∂x = 0 (free slip)
+    # Enforce u = 0 and zero gradient for v (already handled by mirror condition in stencil)
     fu = mod.where(ix == 0, u / dx, fu)
-    fv = mod.where(ix == 0, v / dx, fv)
+    # v has zero gradient, so no explicit constraint needed (mirror handles it)
     
-    # Right wall: u = 0, v = 0
+    # Right wall: u = 0 (normal), ∂v/∂x = 0 (free slip)
+    # Enforce u = 0 and zero gradient for v (already handled by mirror condition in stencil)
     fu = mod.where(ix == nx - 1, u / dx, fu)
-    fv = mod.where(ix == nx - 1, v / dx, fv)
+    # v has zero gradient, so no explicit constraint needed (mirror handles it)
     
     # Pressure: set reference point (bottom-left corner)
     fpress = mod.where((ix == 0) & (iy == 0), p, zero)
