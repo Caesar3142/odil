@@ -7,6 +7,11 @@ Solves the steady-state incompressible Navier-Stokes equations:
     Continuity: ∇·u = 0
     Momentum: (u·∇)u = -∇p + (1/Re)∇²u
 
+Where:
+    u = x-velocity (horizontal velocity component)
+    v = y-velocity (vertical velocity component)
+    p = pressure
+
 Boundary conditions:
     Top wall (y=1): u = 1, v = 0  (moving lid)
     Other walls: u = 0, v = 0     (no-slip)
@@ -290,31 +295,46 @@ def plot_centerlines(domain, state, epoch, frame, args):
     # Get coordinates
     x, y = domain.points("x", "y", loc="cc")
     
+    # Convert to numpy arrays if needed (for JAX compatibility)
+    x = np.array(x)
+    y = np.array(y)
+    u = np.array(u)
+    v = np.array(v)
+    
     # Find center indices (closest to x=0.5 and y=0.5)
+    # In ODIL with indexing="ij": first dimension is x, second is y
+    # So x varies along first dimension (rows), y varies along second dimension (columns)
     nx, ny = domain.cshape
     
-    # For vertical centerline (x = 0.5): find ix where x is closest to 0.5
-    x_mid = x[ny // 2, :]  # Get x coordinates along a row
-    ix_center = np.argmin(np.abs(x_mid - 0.5))
+    # For vertical centerline (x = 0.5): find row index where x is closest to 0.5
+    # x varies along rows (first dimension), so check any column
+    x_col = x[:, 0]  # x coordinates along first column (x varies here)
+    ix_center = np.argmin(np.abs(x_col - 0.5))
     
-    # For horizontal centerline (y = 0.5): find iy where y is closest to 0.5
-    y_mid = y[:, nx // 2]  # Get y coordinates along a column
-    iy_center = np.argmin(np.abs(y_mid - 0.5))
+    # For horizontal centerline (y = 0.5): find column index where y is closest to 0.5
+    # y varies along columns (second dimension), so check any row
+    y_row = y[0, :]  # y coordinates along first row (y varies here)
+    iy_center = np.argmin(np.abs(y_row - 0.5))
     
     # Extract centerline data
-    # u along vertical centerline (x = 0.5)
-    u_centerline = u[:, ix_center]
-    y_centerline = y[:, ix_center]
+    # u (x-velocity) along vertical centerline (x = 0.5)
+    # Extract the entire row at ix_center (all y positions at fixed x)
+    u_centerline = u[ix_center, :]  # All columns (y positions), fixed x row
+    y_centerline = y[ix_center, :]  # y coordinates along that row
     
-    # v along horizontal centerline (y = 0.5)
-    v_centerline = v[iy_center, :]
-    x_centerline = x[iy_center, :]
+    # v (y-velocity) along horizontal centerline (y = 0.5)
+    # Extract the entire column at iy_center (all x positions at fixed y)
+    v_centerline = v[:, iy_center]  # All rows (x positions), fixed y column
+    x_centerline = x[:, iy_center]  # x coordinates along that column
     
-    # Save to CSV
+    # Save to CSV - write both centerlines
     csv_path = f"centerlines_{frame:05d}.csv"
     with open(csv_path, "w", newline="") as f:
         writer = csv.writer(f)
-        writer.writerow(["y", "u_centerline", "x", "v_centerline"])
+        # Write header
+        writer.writerow(["vertical_centerline_x=0.5", "", "horizontal_centerline_y=0.5", ""])
+        writer.writerow(["y", "u_x_velocity", "x", "v_y_velocity"])
+        # Write data - both centerlines have same length (nx = ny for square domain)
         max_len = max(len(y_centerline), len(x_centerline))
         for i in range(max_len):
             y_val = y_centerline[i] if i < len(y_centerline) else ""
@@ -327,25 +347,33 @@ def plot_centerlines(domain, state, epoch, frame, args):
     # Create plots
     fig, axes = plt.subplots(1, 2, figsize=(12, 5))
     
-    # Plot u along vertical centerline
+    # Plot u (x-velocity) along vertical centerline (x = 0.5)
     ax = axes[0]
-    ax.plot(u_centerline, y_centerline, "b-", linewidth=2, label=f"u(x=0.5, y), epoch {epoch}")
-    ax.set_xlabel("u velocity")
+    ax.plot(u_centerline, y_centerline, "b-", linewidth=2, label=f"u (x-velocity) at x=0.5, epoch {epoch}")
+    ax.set_xlabel("u (x-velocity)")
     ax.set_ylabel("y")
-    ax.set_title("u velocity along vertical centerline (x=0.5)")
+    ax.set_title("x-velocity (u) along vertical centerline (x=0.5)")
     ax.grid(True, alpha=0.3)
     ax.legend()
-    ax.set_xlim(-0.1, 1.1)
+    # Set appropriate limits based on data
+    u_min, u_max = np.min(u_centerline), np.max(u_centerline)
+    u_range = u_max - u_min
+    ax.set_xlim(u_min - 0.1 * u_range if u_range > 0 else -0.1, u_max + 0.1 * u_range if u_range > 0 else 1.1)
+    ax.set_ylim(0, 1)  # y goes from 0 to 1
     
-    # Plot v along horizontal centerline
+    # Plot v (y-velocity) along horizontal centerline (y = 0.5)
     ax = axes[1]
-    ax.plot(x_centerline, v_centerline, "r-", linewidth=2, label=f"v(x, y=0.5), epoch {epoch}")
+    ax.plot(x_centerline, v_centerline, "r-", linewidth=2, label=f"v (y-velocity) at y=0.5, epoch {epoch}")
     ax.set_xlabel("x")
-    ax.set_ylabel("v velocity")
-    ax.set_title("v velocity along horizontal centerline (y=0.5)")
+    ax.set_ylabel("v (y-velocity)")
+    ax.set_title("y-velocity (v) along horizontal centerline (y=0.5)")
     ax.grid(True, alpha=0.3)
     ax.legend()
-    ax.set_ylim(-0.1, 0.1)
+    # Set appropriate limits based on data
+    v_min, v_max = np.min(v_centerline), np.max(v_centerline)
+    v_range = v_max - v_min
+    ax.set_xlim(0, 1)  # x goes from 0 to 1
+    ax.set_ylim(v_min - 0.1 * v_range if v_range > 0 else -0.1, v_max + 0.1 * v_range if v_range > 0 else 0.1)
     
     plt.tight_layout()
     plotutil.savefig(fig, f"centerlines_{frame:05d}", printf=printlog)
